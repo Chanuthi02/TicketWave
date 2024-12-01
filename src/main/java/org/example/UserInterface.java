@@ -1,100 +1,76 @@
 package org.example;
 
 import javafx.application.Application;
-import javafx.concurrent.Task;
 import javafx.scene.Scene;
-import javafx.scene.control.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class UserInterface extends Application {
-    private Thread vendorThread;
-    private Thread customerThread;
+    private final List<Thread> vendorThreads = new ArrayList<>();
+    private final List<Thread> customerThreads = new ArrayList<>();
+    private TicketPool ticketPool;
 
     @Override
     public void start(Stage primaryStage) {
-        // Create the ticket pool based on the configuration
-        TicketPool ticketPool = new TicketPool(Configuration.MAX_TICKET_CAPACITY);
+        ticketPool = new TicketPool(Configuration.MAX_TICKET_CAPACITY);
 
-        // UI Components
         Button startButton = new Button("Start System");
         Button stopButton = new Button("Stop System");
         stopButton.setDisable(true);
 
         Label ticketCountLabel = new Label("Tickets Available: 0");
-        TextArea logArea = new TextArea();
-        logArea.setEditable(false);
 
-        // Layout
-        VBox layout = new VBox(10);
-        layout.getChildren().addAll(startButton, stopButton, ticketCountLabel, logArea);
+        VBox layout = new VBox(10, startButton, stopButton, ticketCountLabel);
+        Scene scene = new Scene(layout, 400, 300);
 
-        // Start Button Action
         startButton.setOnAction(e -> {
-            logArea.appendText("System Starting...\n");
-
-            vendorThread = new Thread(createVendorTask(ticketPool, logArea));
-            customerThread = new Thread(createCustomerTask(ticketPool, logArea));
-            vendorThread.start();
-            customerThread.start();
-
+            startSystem();
             startButton.setDisable(true);
             stopButton.setDisable(false);
-
-            // Update ticket count periodically
-            new Thread(() -> {
-                while (!Thread.currentThread().isInterrupted()) {
-                    try {
-                        Thread.sleep(1000); // Update every second
-                        int count = ticketPool.getTicketCount();
-                        ticketCountLabel.setText("Tickets Available: " + count);
-                    } catch (InterruptedException ignored) {
-                        Thread.currentThread().interrupt();
-                    }
-                }
-            }).start();
         });
 
-        // Stop Button Action
         stopButton.setOnAction(e -> {
-            if (vendorThread != null) vendorThread.interrupt();
-            if (customerThread != null) customerThread.interrupt();
-            logArea.appendText("System Stopped.\n");
-
+            stopSystem();
             startButton.setDisable(false);
             stopButton.setDisable(true);
         });
 
-        // Scene Setup
-        Scene scene = new Scene(layout, 400, 300);
-        primaryStage.setTitle("Event Ticketing System");
         primaryStage.setScene(scene);
+        primaryStage.setTitle("Event Ticketing System");
         primaryStage.show();
     }
 
-    private Task<Void> createVendorTask(TicketPool ticketPool, TextArea logArea) {
-        return new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                Vendor vendor = new Vendor(ticketPool, "Vendor1", Configuration.TICKET_RELEASE_RATE);
-                vendor.run();
-                return null;
-            }
-        };
+    private void startSystem() {
+        for (int i = 1; i <= 3; i++) { // Three vendors
+            Vendor vendor = new Vendor(ticketPool, "Vendor-" + i, Configuration.TICKET_RELEASE_RATE);
+            Thread vendorThread = new Thread(vendor, "Vendor-" + i);
+            vendorThreads.add(vendorThread);
+            vendorThread.start();
+        }
+
+        for (int i = 1; i <= 5; i++) { // Five customers
+            Customer customer = new Customer(ticketPool, "Customer-" + i);
+            Thread customerThread = new Thread(customer, "Customer-" + i);
+            customerThreads.add(customerThread);
+            customerThread.start();
+        }
     }
 
-    private Task<Void> createCustomerTask(TicketPool ticketPool, TextArea logArea) {
-        return new Task<>() {
-            @Override
-            protected Void call() throws Exception {
-                Customer customer = new Customer(ticketPool, "Customer1");
-                customer.run();
-                return null;
-            }
-        };
+    private void stopSystem() {
+        vendorThreads.forEach(Thread::interrupt);
+        customerThreads.forEach(Thread::interrupt);
+        vendorThreads.clear();
+        customerThreads.clear();
+        System.out.println("System Stopped.");
     }
 
     public static void main(String[] args) {
+        Configuration.loadConfiguration();
         launch(args);
     }
 }
