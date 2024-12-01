@@ -13,6 +13,7 @@ public class UserInterface extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        // Create the ticket pool based on the configuration
         TicketPool ticketPool = new TicketPool(Configuration.MAX_TICKET_CAPACITY);
 
         // UI Components
